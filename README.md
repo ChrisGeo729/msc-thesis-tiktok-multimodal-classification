@@ -153,8 +153,8 @@ All notebooks use paths relative to the `notebooks/` directory (e.g. `../data/Ti
 | Videos (total) | 222,552 | 225,042 |
 | Unique labels | 101 | 3,860 |
 | Text feature | Captions | Title + Tags |
-| TF-IDF Micro F1 | — | 0.4974 |
-| TF-IDF Macro F1 | — | 0.3645 |
+| TF-IDF Micro F1 | 0.3617  | 0.4974 |
+| TF-IDF Macro F1 | 0.2544 | 0.3645 |
 
 ---
 

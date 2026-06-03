@@ -3,18 +3,16 @@ import json
 import os
 import time
 from pathlib import Path
-
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-API_KEY = os.environ["YOUTUBE_API_KEY"]
-
+API_KEY    = "REDACTED"
 _DATA      = Path(__file__).resolve().parent.parent / "data" / "Youtube"
 INPUT_IDS  = str(_DATA / "yt8m_id_to_youtube_id.csv")
 OUTPUT_CSV = str(_DATA / "youtube8m_text.csv")
-
+PROGRESS   = str(_DATA / "youtube8m_text.progress.jsonl")
 BATCH_SIZE = 50
-RETRIES = 6
+RETRIES    = 6
 SLEEP_SECS = 0.05
 
 
@@ -22,6 +20,18 @@ def read_ids(path):
     with open(path, newline="", encoding="utf-8") as f:
         ids = [(row.get("youtube_id") or "").strip() for row in csv.DictReader(f)]
     return list(dict.fromkeys(v for v in ids if v))
+
+
+def load_done(path):
+    done = set()
+    if not os.path.exists(path):
+        return done
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                done.update(json.loads(line))
+    return done
 
 
 def chunked(lst, n):
@@ -35,7 +45,6 @@ def fetch_batch(youtube, ids):
         id=",".join(ids),
         maxResults=len(ids),
     ).execute()
-
     out = {}
     for item in resp.get("items", []):
         vid = item.get("id")
@@ -54,22 +63,33 @@ def main():
     ids = read_ids(INPUT_IDS)
     print(f"Loaded {len(ids)} youtube ids")
 
-    ok = 0
-    missing = 0
+    done = load_done(PROGRESS)
+    remaining = [v for v in ids if v not in done]
+    print(f"Already fetched: {len(done)}, remaining: {len(remaining)}")
 
-    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+    write_header = not os.path.exists(OUTPUT_CSV) or os.path.getsize(OUTPUT_CSV) == 0
+    ok = missing = 0
+
+    with open(OUTPUT_CSV, "a", newline="", encoding="utf-8") as f, \
+         open(PROGRESS, "a", encoding="utf-8") as pf:
+
         w = csv.DictWriter(
             f,
             fieldnames=["youtube_id", "title", "tags_json", "channelTitle", "publishedAt", "status"],
         )
-        w.writeheader()
+        if write_header:
+            w.writeheader()
 
-        for batch in chunked(ids, BATCH_SIZE):
+        for batch in chunked(remaining, BATCH_SIZE):
             for attempt in range(RETRIES):
                 try:
                     data = fetch_batch(youtube, batch)
                     break
                 except HttpError as e:
+                    if e.resp.status == 403 and "quotaExceeded" in str(e):
+                        print(f"Quota exceeded. Exiting — resume tomorrow (resets 08:00 Amsterdam).")
+                        print(f"Progress so far: ok={ok}, missing={missing}")
+                        return
                     wait = (2 ** attempt) + 0.2
                     print(f"HttpError: {e}. retry {attempt+1}/{RETRIES} in {wait:.1f}s")
                     time.sleep(wait)
@@ -85,7 +105,6 @@ def main():
                     row = {"title": None, "tags": [], "channelTitle": None, "publishedAt": None}
                     status = "missing/private/deleted"
                     missing += 1
-
                 w.writerow({
                     "youtube_id": vid,
                     "title": row["title"],
@@ -95,6 +114,9 @@ def main():
                     "status": status,
                 })
 
+            pf.write(json.dumps(batch) + "\n")
+            pf.flush()
+            f.flush()
             time.sleep(SLEEP_SECS)
 
     print(f"Done. ok={ok}, missing={missing}")

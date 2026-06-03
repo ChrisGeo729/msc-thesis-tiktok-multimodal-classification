@@ -16,6 +16,11 @@ __pycache__/
 *.jpeg
 *.png
 *.json
+*.out
+*.pt
+*.npy
+*.bin
+*.parquet
 
 data/TikTok/tiktok_thumbnails/
 data/TikTok/tiktok_transcripts_out/

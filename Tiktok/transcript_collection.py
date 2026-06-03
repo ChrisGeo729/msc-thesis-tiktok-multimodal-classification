@@ -5,6 +5,7 @@ import time
 import tempfile
 from pathlib import Path
 import requests
+import subprocess as _sp
 
 try:
     import browser_cookie3
@@ -31,8 +32,7 @@ HEADERS = {
 
 LANG_PRIORITY = [
     "eng-GB", "eng-US", "fra-FR", "deu-DE", "spa-ES",
-    "ita-IT", "rus-RU", "kor-KR", "jpn-JP", "ara-SA",
-    "ind-ID", "por-PT", "cmn-Hans-CN", "vie-VN",
+    "ita-IT",
 ]
 
 
@@ -132,7 +132,16 @@ def try_subtitles_from_data(data, video_id, out_dir, session):
     filename.write_bytes(rr.content)
     return True, str(filename), "subtitleInfos"
 
-
+def has_audio_stream(path):
+    cmd = [
+        "ffprobe", "-v", "quiet", "-print_format", "json",
+        "-show_streams", "-select_streams", "a", str(path)
+    ]
+    try:
+        r = _sp.run(cmd, capture_output=True, text=True, timeout=10)
+        return len(json.loads(r.stdout).get("streams", [])) > 0
+    except Exception:
+        return False
 def extract_video_urls_from_data(data):
     try:
         video_struct = data["webapp.video-detail"]["itemInfo"]["itemStruct"]["video"]
@@ -189,6 +198,9 @@ def download_video_from_url(candidates, tmp_dir, session, max_retries=3):
 
 
 def transcribe_with_whisper(audio_path, video_id, out_dir, model_size="base"):
+    if not has_audio_stream(audio_path):
+        return False, "No audio stream in video"
+
     result = get_whisper_model(model_size).transcribe(audio_path, task="transcribe", verbose=False)
 
     vid_dir  = out_dir / str(video_id)
@@ -262,20 +274,44 @@ def main():
     WHISPER_MODEL      = "base"
     USE_WHISPER        = True
     COOKIES_BROWSER    = "chrome"
-    SLEEP_BETWEEN_REQS = 2.0
+    SLEEP_BETWEEN_REQS = 5.0
+    PAUSE_EVERY        = 50
+    PAUSE_DURATION     = 60
+
+    failed_path = DATA_DIR / "transcript_failed_ids.txt"
 
     session = build_session(cookies_browser=COOKIES_BROWSER)
+
+    already_done = set(p.parent.name for p in out_dir.rglob("*.vtt"))
+    print(f"Already collected: {len(already_done)} transcripts — skipping these.")
+
+    # load previously failed ids
+    if failed_path.exists():
+        failed_ids = set(failed_path.read_text().splitlines())
+    else:
+        failed_ids = set()
+    print(f"Previously failed: {len(failed_ids)} videos — skipping these.")
 
     with csv_path.open("r", encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
 
-    ok_count = sub_count = whis_count = fail_count = 0
+    ok_count = sub_count = whis_count = fail_count = skipped = attempted = 0
+    new_failed = []
 
     for i, row in enumerate(rows, start=1):
         video_id = row.get("VideoId")
         username = row.get("AuthorName")
         if not video_id or not username:
             continue
+
+        if video_id in already_done or video_id in failed_ids:
+            skipped += 1
+            continue
+
+        attempted += 1
+        if attempted % PAUSE_EVERY == 0:
+            print(f"Pausing {PAUSE_DURATION}s to avoid rate limiting...")
+            time.sleep(PAUSE_DURATION)
 
         url = f"https://www.tiktok.com/@{username}/video/{video_id}"
         ok, info, method = download_transcript(
@@ -288,20 +324,31 @@ def main():
 
         if ok:
             ok_count += 1
+            already_done.add(video_id)
             if method == "whisper":
                 whis_count += 1
             else:
                 sub_count += 1
-        else:
+        if not ok:
             fail_count += 1
+            new_failed.append(video_id)
+            with failed_path.open("a") as f:
+                f.write(video_id + "\n")
 
         time.sleep(SLEEP_BETWEEN_REQS)
+
+    # write any remaining failures
+    if new_failed:
+        remainder = new_failed[-(len(new_failed) % 100) or len(new_failed):]
+        with failed_path.open("a") as f:
+            f.write("\n".join(remainder) + "\n")
 
     print(
         f"\nDone. {ok_count}/{len(rows)} transcripts saved to: {out_dir}\n"
         f"  via subtitleInfos : {sub_count}\n"
         f"  via Whisper       : {whis_count}\n"
-        f"  failed            : {fail_count}"
+        f"  failed            : {fail_count}\n"
+        f"  skipped (done)    : {skipped}"
     )
 
 

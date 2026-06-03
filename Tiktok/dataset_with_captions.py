@@ -11,7 +11,7 @@ TIMESTAMP_RE = re.compile(r"^\d{2}:\d{2}:\d{2}\.\d{3}\s-->\s\d{2}:\d{2}:\d{2}\.\
 STYLE_TAG_RE = re.compile(r"</?[^>]+>")
 NOTE_RE = re.compile(r"^NOTE\b", re.IGNORECASE)
 FILL_ONLY_IF_EMPTY = False   
-PROGRESS_EVERY = 10_000
+PROGRESS_EVERY = 20_000
 
 
 
@@ -42,7 +42,7 @@ def clean_vtt_text(vtt_content):
 def is_empty(x):
     return x is None or str(x).strip() == "" or str(x).strip().lower() == "nan"
 
-# creates lookup dict video_id -> vtt_file_path
+# dict video_id -> vtt_file_path
 def build_vtt_index(vtt_root):
     index: dict[str, Path] = {}
     if not vtt_root.exists():

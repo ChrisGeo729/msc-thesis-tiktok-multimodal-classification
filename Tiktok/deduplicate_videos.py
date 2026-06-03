@@ -1,13 +1,13 @@
 import csv
 from pathlib import Path
+import tempfile
+import os
 
-_DATA = Path(__file__).resolve().parent.parent / "data" / "TikTok"
-
-INPUT_CSV  = _DATA / "query_result_2026-01-17T19_26_44.636561Z.csv"
-OUTPUT_CSV = _DATA / "videos_unique.csv"
+INPUT_CSV  = Path("/Users/christosgeorghiou/Desktop/MSc Thesis/data/TikTok/query_with_captions_filled.csv")
+OUTPUT_CSV = Path("/Users/christosgeorghiou/Desktop/MSc Thesis/data/TikTok/query_with_captions_filled1.csv")
 
 VIDEO_ID_COL = "VideoId"
-PROGRESS_EVERY = 50_000
+PROGRESS_EVERY = 150_000
 
 
 def normalize_video_id(x):
@@ -27,34 +27,41 @@ def main():
     total = 0
     written = 0
 
-    with INPUT_CSV.open("r", encoding="utf-8", newline="") as fin, \
-         OUTPUT_CSV.open("w", encoding="utf-8", newline="") as fout:
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=OUTPUT_CSV.parent, suffix=".csv")
+    try:
+        with INPUT_CSV.open("r", encoding="utf-8", newline="") as fin, \
+             os.fdopen(tmp_fd, "w", encoding="utf-8", newline="") as fout:
 
-        reader = csv.DictReader(fin)
-        fieldnames = reader.fieldnames or []
+            reader = csv.DictReader(fin)
+            fieldnames = reader.fieldnames or []
 
-        if VIDEO_ID_COL not in fieldnames:
-            raise ValueError(f"Missing column {VIDEO_ID_COL}")
+            if VIDEO_ID_COL not in fieldnames:
+                raise ValueError(f"Missing column {VIDEO_ID_COL}")
 
-        writer = csv.DictWriter(fout, fieldnames=fieldnames)
-        writer.writeheader()
+            writer = csv.DictWriter(fout, fieldnames=fieldnames)
+            writer.writeheader()
 
-        for row in reader:
-            total += 1
+            for row in reader:
+                total += 1
 
-            vid = normalize_video_id(row.get(VIDEO_ID_COL))
-            if not vid:
-                continue
+                vid = normalize_video_id(row.get(VIDEO_ID_COL))
+                if not vid:
+                    continue
 
-            if vid in seen:
-                continue
+                if vid in seen:
+                    continue
 
-            seen.add(vid)
-            writer.writerow(row)
-            written += 1
+                seen.add(vid)
+                writer.writerow(row)
+                written += 1
 
-            if total % PROGRESS_EVERY == 0:
-                print(f"Processed {total:,} rows | unique videos written: {written:,}")
+                if total % PROGRESS_EVERY == 0:
+                    print(f"Processed {total:,} rows | unique videos written: {written:,}")
+
+        os.replace(tmp_path, OUTPUT_CSV)
+    except Exception:
+        os.unlink(tmp_path)
+        raise
 
     print(f"Rows read: {total:,}")
     print(f"Unique videos written: {written:,}")

@@ -121,7 +121,7 @@ ax.set_xticks(x + width)
 ax.set_xticklabels(BIN_LABELS)
 ax.set_xlabel("Class support (# positive examples in test set)", fontsize=11)
 ax.set_ylabel("Mean per-class F1", fontsize=11)
-ax.set_title("Mean F1 by label frequency bin (thr=0.3)", fontsize=12)
+ax.set_title("TKGO - Mean F1 by label frequency bin (thr=0.3)", fontsize=12)
 ax.set_ylim(0, 1.05)
 ax.legend(fontsize=9)
 ax.spines["top"].set_visible(False)
@@ -187,7 +187,7 @@ for ax, (name, m) in zip(axes, models.items()):
     )
     plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="Prediction rate")
 
-fig.suptitle(f"Co-occurrence heatmap — top {TOP_N} classes by support (thr={THR})",
+fig.suptitle(f"TKGO - Co-occurrence heatmap — top {TOP_N} classes by support (thr={THR})",
              fontsize=13, y=1.02)
 plt.tight_layout()
 plt.savefig(f"{OUT_DIR}/cooccurrence_heatmap.png", dpi=150, bbox_inches="tight")
@@ -234,7 +234,7 @@ for ax, (name, m) in zip(axes, models.items()):
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
-fig.suptitle("Predicted probability distribution: positive vs negative labels",
+fig.suptitle("TKGO - Predicted probability distribution: positive vs negative labels",
              fontsize=13, y=1.02)
 plt.tight_layout()
 plt.savefig(f"{OUT_DIR}/output_distribution.png", dpi=150, bbox_inches="tight")

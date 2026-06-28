@@ -21,7 +21,7 @@ models = {
         "true":    np.load(f"{SCRATCH_DIR}/preds_text_true.npy"),
         "classes": np.load(f"{SCRATCH_DIR}/preds_text_classes.npy", allow_pickle=True),
     },
-    "Visual (ResNet RGB)": {
+    "Visual (Inception-v3 RGB)": {
         "prob":    np.load(f"{SCRATCH_DIR}/preds_visual_prob.npy"),
         "true":    np.load(f"{SCRATCH_DIR}/preds_visual_true.npy"),
         "classes": np.load(f"{SCRATCH_DIR}/preds_visual_classes.npy", allow_pickle=True),
@@ -34,7 +34,7 @@ models = {
 }
 
 colors = {"Text (titles + TF-IDF tags)": "#2196F3",
-          "Visual (ResNet RGB)":          "#FF5722",
+          "Visual (Inception-v3 RGB)":          "#FF5722",
           "Multimodal (early fusion)":    "#4CAF50"}
 
 

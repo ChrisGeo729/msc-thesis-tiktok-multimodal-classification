@@ -113,7 +113,7 @@ def extract_features(model, X, batch_size=BATCH_SIZE):
     return np.vstack(feats)
 
 
-print("Loading data...")
+print("Loading data")
 df_visual = pd.read_csv(DATA_PATH, low_memory=False)
 df_visual["label_list"] = df_visual["Labels"].apply(
     lambda s: re.findall(r'"([^"]+)"', s) if isinstance(s, str) else []
@@ -335,7 +335,7 @@ for seed in SEEDS:
     set_seed(seed)
 
     # visual head
-    print(f"  Training visual head...")
+    print(f"  Training visual head")
     save_p   = f"{SAVE_DIR}/seed_{seed}_visual.pt"
     model    = VisualHead(num_classes_visual).to(DEVICE)
     opt      = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=L2_DECAY)
@@ -347,13 +347,17 @@ for seed in SEEDS:
     m = get_metrics(y_prob, y_true, THR)
     print(f"  Visual: GAP@20={m['GAP@20']:.4f}  micro_f1={m['micro_f1']:.4f}  macro_f1={m['macro_f1']:.4f}")
     all_results.append({"seed": seed, "model": "Visual head", **m})
+    if seed == 42:
+        np.save(f"{SAVE_DIR}/preds_visual_prob.npy", y_prob)
+        np.save(f"{SAVE_DIR}/preds_visual_true.npy", y_true)
+        np.save(f"{SAVE_DIR}/preds_visual_classes.npy", mlb_visual.classes_)
 
     vis_feats_all  = extract_features(model, X_visual_all)
     vis_feat_lookup = {vid: vis_feats_all[i] for i, vid in enumerate(df_visual["VideoId"])}
     os.remove(save_p)
 
     # TextCNN on descriptions
-    print(f"  Training TextCNN (descriptions)...")
+    print(f"  Training TextCNN (descriptions)")
     set_seed(seed)
     save_p    = f"{SAVE_DIR}/seed_{seed}_textcnn_desc.pt"
     X_tr_desc = X_desc[text_idx_train][has_desc_arr[text_idx_train]]
@@ -377,7 +381,7 @@ for seed in SEEDS:
     os.remove(save_p)
 
     # text fusion (desc + hashtags)
-    print(f"  Training text fusion (desc + hashtags)...")
+    print(f"  Training text fusion (desc + hashtags)")
     set_seed(seed)
     save_p   = f"{SAVE_DIR}/seed_{seed}_text_fusion.pt"
     X_fused  = np.hstack([text_feats_all, X_hashtags])
@@ -393,9 +397,13 @@ for seed in SEEDS:
     m = get_metrics(y_prob_f, y_true_f, THR)
     print(f"  Text fusion: GAP@20={m['GAP@20']:.4f}  micro_f1={m['micro_f1']:.4f}  macro_f1={m['macro_f1']:.4f}")
     all_results.append({"seed": seed, "model": "Text fusion (desc + hashtags)", **m})
+    if seed == 42:
+        np.save(f"{SAVE_DIR}/preds_text_prob.npy", y_prob_f)
+        np.save(f"{SAVE_DIR}/preds_text_true.npy", y_true_f)
+        np.save(f"{SAVE_DIR}/preds_text_classes.npy", mlb_text.classes_)
     os.remove(save_p)
 
-    # multimodal — align by VideoId intersection
+    # multimodal
     common_ids = sorted(set(text_feat_lookup.keys()) & set(vis_feat_lookup.keys()))
     df_mm      = df_visual[df_visual["VideoId"].isin(common_ids)].drop_duplicates(
         subset="VideoId", keep="first").reset_index(drop=True)
@@ -414,7 +422,7 @@ for seed in SEEDS:
     mm_input_dim = HIDDEN_DIM_TEXT + 1024
 
     # early fusion
-    print(f"  Training early fusion...")
+    print(f"  Training early fusion")
     set_seed(seed)
     save_p = f"{SAVE_DIR}/seed_{seed}_early_fusion.pt"
     ef     = EarlyFusion(mm_input_dim, num_classes_mm).to(DEVICE)
@@ -424,10 +432,14 @@ for seed in SEEDS:
     m = get_metrics(y_prob_ef, y_true_ef, THR)
     print(f"  Early fusion: GAP@20={m['GAP@20']:.4f}  micro_f1={m['micro_f1']:.4f}  macro_f1={m['macro_f1']:.4f}")
     all_results.append({"seed": seed, "model": "Early fusion", **m})
+    if seed == 42:
+        np.save(f"{SAVE_DIR}/preds_multimodal_prob.npy", y_prob_ef)
+        np.save(f"{SAVE_DIR}/preds_multimodal_true.npy", y_true_ef)
+        np.save(f"{SAVE_DIR}/preds_multimodal_classes.npy", mlb_mm.classes_)
     os.remove(save_p)
 
     # MoE
-    print(f"  Training MoE...")
+    print(f"  Training MoE")
     set_seed(seed)
     save_p  = f"{SAVE_DIR}/seed_{seed}_moe.pt"
     moe     = MoE(mm_input_dim, 4, num_classes_mm).to(DEVICE)
